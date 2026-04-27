@@ -65,6 +65,12 @@ const { createGatewayCloseHandler } = await import("./server-close.js");
 type GatewayCloseHandlerParams = Parameters<typeof createGatewayCloseHandler>[0];
 type GatewayCloseClient = GatewayCloseHandlerParams["clients"] extends Set<infer T> ? T : never;
 
+async function flushMicrotasks(times = 5): Promise<void> {
+  for (let i = 0; i < times; i += 1) {
+    await Promise.resolve();
+  }
+}
+
 function createGatewayCloseTestDeps(
   overrides: Partial<GatewayCloseHandlerParams> = {},
 ): GatewayCloseHandlerParams {
@@ -217,6 +223,32 @@ describe("createGatewayCloseHandler", () => {
     expect(mocks.disposeAgentHarnesses).toHaveBeenCalledTimes(1);
     expect(mocks.disposeAllSessionMcpRuntimes).toHaveBeenCalledTimes(1);
     expect(mocks.disposeAllBundleLspRuntimes).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts bundle MCP and LSP runtime disposal concurrently", async () => {
+    const disposalOrder: string[] = [];
+    let releaseMcp: (() => void) | undefined;
+    const mcpBlocked = new Promise<void>((resolve) => {
+      releaseMcp = resolve;
+    });
+    mocks.disposeAllSessionMcpRuntimes.mockImplementation(async () => {
+      disposalOrder.push("mcp-start");
+      await mcpBlocked;
+      disposalOrder.push("mcp-end");
+    });
+    mocks.disposeAllBundleLspRuntimes.mockImplementation(async () => {
+      disposalOrder.push("lsp-start");
+    });
+    const close = createGatewayCloseHandler(createGatewayCloseTestDeps());
+
+    const closePromise = close({ reason: "test shutdown" });
+    try {
+      await flushMicrotasks();
+      expect(disposalOrder).toEqual(["mcp-start", "lsp-start"]);
+    } finally {
+      releaseMcp?.();
+      await closePromise;
+    }
   });
 
   it("continues shutdown when bundle MCP runtime disposal hangs", async () => {

@@ -223,16 +223,18 @@ export function createGatewayCloseHandler(params: {
         await params.stopChannel(plugin.id);
       }
       await disposeRegisteredAgentHarnesses();
-      await disposeRuntimeWithShutdownGrace({
-        label: "bundle-mcp",
-        dispose: params.disposeSessionMcpRuntimes ?? disposeAllSessionMcpRuntimes,
-        graceMs: MCP_RUNTIME_CLOSE_GRACE_MS,
-      });
-      await disposeRuntimeWithShutdownGrace({
-        label: "bundle-lsp",
-        dispose: params.disposeBundleLspRuntimes ?? disposeAllBundleLspRuntimes,
-        graceMs: LSP_RUNTIME_CLOSE_GRACE_MS,
-      });
+      await Promise.all([
+        disposeRuntimeWithShutdownGrace({
+          label: "bundle-mcp",
+          dispose: params.disposeSessionMcpRuntimes ?? disposeAllSessionMcpRuntimes,
+          graceMs: MCP_RUNTIME_CLOSE_GRACE_MS,
+        }),
+        disposeRuntimeWithShutdownGrace({
+          label: "bundle-lsp",
+          dispose: params.disposeBundleLspRuntimes ?? disposeAllBundleLspRuntimes,
+          graceMs: LSP_RUNTIME_CLOSE_GRACE_MS,
+        }),
+      ]);
       if (params.pluginServices) {
         await params.pluginServices.stop().catch(() => {});
       }
