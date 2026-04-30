@@ -38,7 +38,7 @@ resources.
 | `oc.sessions`             | Ready   | Creates, resolves, sends to, patches, compacts, and gets session handles.    |
 | `Session.send()`          | Ready   | Calls `sessions.send` and returns a `Run`.                                   |
 | `oc.models`               | Ready   | Calls `models.list` and the current `models.authStatus` status RPC.          |
-| `oc.tools`                | Partial | Lists tool catalog and effective tools; direct tool invocation is not wired. |
+| `oc.tools`                | Ready   | Lists, scopes, and invokes Gateway tools through the policy pipeline.        |
 | `oc.artifacts`            | Ready   | Lists, gets, and downloads Gateway transcript artifacts.                     |
 | `oc.approvals`            | Ready   | Lists and resolves exec approvals through Gateway approval RPCs.             |
 | `oc.rawEvents()`          | Ready   | Exposes raw Gateway events for advanced consumers.                           |
@@ -216,11 +216,19 @@ await oc.models.list();
 await oc.models.status({ probe: false }); // calls models.authStatus
 ```
 
-Tool helpers expose the Gateway catalog and effective tool view:
+Tool helpers expose the Gateway catalog, effective tool view, and direct
+Gateway tool invocation. `oc.tools.invoke()` returns a typed envelope instead
+of throwing for policy or approval refusals.
 
 ```typescript
 await oc.tools.list();
 await oc.tools.effective({ sessionKey: "main" });
+await oc.tools.invoke("tool-name", {
+  args: { input: "value" },
+  sessionKey: "main",
+  confirm: false,
+  idempotencyKey: "tool-call-1",
+});
 ```
 
 Artifact helpers expose the Gateway artifact projection for session, run, or
@@ -255,8 +263,6 @@ errors:
 await oc.tasks.list();
 await oc.tasks.get("task-id");
 await oc.tasks.cancel("task-id");
-
-await oc.tools.invoke("tool-name", {});
 
 await oc.environments.list();
 await oc.environments.create({});

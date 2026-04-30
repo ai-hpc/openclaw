@@ -18,6 +18,8 @@ import type {
   SessionCreateParams,
   SessionSendParams,
   SessionTarget,
+  ToolInvokeParams,
+  ToolInvokeResult,
 } from "./types.js";
 
 const MAX_REPLAY_RUNS = 100;
@@ -764,10 +766,17 @@ export class ToolsNamespace extends RpcNamespace {
     return await this.call("effective", params);
   }
 
-  async invoke(name: string, params?: unknown): Promise<unknown> {
-    void name;
-    void params;
-    return unsupportedGatewayApi("oc.tools.invoke");
+  async invoke(name: string, params?: ToolInvokeParams): Promise<ToolInvokeResult> {
+    return await this.call("invoke", {
+      name,
+      ...(params?.action ? { action: params.action } : {}),
+      ...(params?.args ? { args: params.args } : {}),
+      ...(params?.sessionKey ? { sessionKey: params.sessionKey } : {}),
+      ...(params?.agentId ? { agentId: params.agentId } : {}),
+      ...(typeof params?.confirm === "boolean" ? { confirm: params.confirm } : {}),
+      ...(params?.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}),
+      ...(typeof params?.dryRun === "boolean" ? { dryRun: params.dryRun } : {}),
+    });
   }
 }
 
