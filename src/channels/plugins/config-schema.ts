@@ -2,16 +2,13 @@ import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { DmPolicySchema } from "../../config/zod-schema.core.js";
 import { validateJsonSchemaValue } from "../../plugins/schema-validator.js";
 import type { JsonSchemaObject } from "../../shared/json-schema.types.js";
+import { convertChannelConfigSchemaToJsonInput } from "./config-schema-input-mode.js";
 import type {
   ChannelConfigRuntimeIssue,
   ChannelConfigRuntimeParseResult,
   ChannelConfigSchema,
   ChannelConfigUiHint,
 } from "./types.config.js";
-
-type ZodSchemaWithToJsonSchema = ZodTypeAny & {
-  toJSONSchema?: (params?: Record<string, unknown>) => unknown;
-};
 
 type ExtendableZodObject = ZodTypeAny & {
   extend: (shape: Record<string, ZodTypeAny>) => ZodTypeAny;
@@ -130,13 +127,10 @@ export function buildChannelConfigSchema(
   schema: ZodTypeAny,
   options?: BuildChannelConfigSchemaOptions,
 ): ChannelConfigSchema {
-  const schemaWithJson = schema as ZodSchemaWithToJsonSchema;
-  if (typeof schemaWithJson.toJSONSchema === "function") {
+  const inputJsonSchema = convertChannelConfigSchemaToJsonInput(schema);
+  if (inputJsonSchema) {
     return {
-      schema: schemaWithJson.toJSONSchema({
-        target: "draft-07",
-        unrepresentable: "any",
-      }) as JsonSchemaObject,
+      schema: inputJsonSchema,
       ...(options?.uiHints ? { uiHints: options.uiHints } : {}),
       runtime: {
         safeParse: (value) => safeParseRuntimeSchema(schema, value),
