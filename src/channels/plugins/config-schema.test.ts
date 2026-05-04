@@ -13,6 +13,26 @@ describe("buildChannelConfigSchema", () => {
     expect(result.schema).toMatchObject({ type: "object" });
   });
 
+  it("does not mark optional-with-default fields as required (#77116)", () => {
+    // Zod 4's toJSONSchema defaults to io: 'output', which marks
+    // `.optional().default(X)` fields as required because the output type
+    // always has a value. The validator validates user *input*, so the
+    // schema must reflect input requirements — defaulted optional fields
+    // must be omittable. Without `io: 'input'`, pre-existing channel
+    // configs (Feishu, Bluebubbles, IRC, Line, Nextcloud Talk, Zalouser)
+    // crash the gateway in a restart loop after upgrade.
+    const schema = z.object({
+      mandatory: z.string(),
+      optionalWithDefault: z.string().optional().default("seed"),
+      pureOptional: z.string().optional(),
+    });
+    const result = buildChannelConfigSchema(schema);
+    expect(result.schema).toMatchObject({
+      type: "object",
+      required: ["mandatory"],
+    });
+  });
+
   it("falls back when toJSONSchema is missing (zod v3 plugin compatibility)", () => {
     const legacySchema = {} as unknown as Parameters<typeof buildChannelConfigSchema>[0];
     const result = buildChannelConfigSchema(legacySchema);
@@ -31,6 +51,7 @@ describe("buildChannelConfigSchema", () => {
     expect(toJSONSchema).toHaveBeenCalledWith({
       target: "draft-07",
       unrepresentable: "any",
+      io: "input",
     });
     expect(result.schema).toEqual({
       type: "object",
