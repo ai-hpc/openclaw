@@ -560,6 +560,39 @@ describe("config plugin validation", () => {
     });
   });
 
+  it("warns when channels.X is enabled but no plugin manifest exists for an externalized channel", () => {
+    // Reproduces the silent-feishu-drop seen during 2026.5.7 -> 2026.5.10-beta.3
+    // beta upgrades: the bundled channel catalog still names `feishu` as a known
+    // channel id, so the unknown-channel branch never fires, but no plugin
+    // manifest is bundled in the new release. The user was left with
+    // `channels.feishu.enabled: true` in config, no warning, and feishu silently
+    // dropped from the running gateway.
+    const res = validateConfigObjectWithPlugins(
+      {
+        agents: { list: [{ id: "pi" }] },
+        channels: {
+          feishu: { enabled: true },
+        },
+      },
+      {
+        env: suiteEnv(),
+        pluginMetadataSnapshot: {
+          manifestRegistry: {
+            plugins: [],
+            diagnostics: [],
+          },
+        },
+      },
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.warnings ?? []).toContainEqual({
+      path: "channels.feishu",
+      message:
+        "plugin not installed: feishu — install the official external plugin with: openclaw plugins install @openclaw/feishu",
+    });
+  });
+
   it("uses persisted installed-plugin records as stale channel evidence", async () => {
     const installedPluginIndexPath = path.join(suiteHome, ".openclaw", "plugins", "installs.json");
     await mkdirSafe(path.dirname(installedPluginIndexPath));

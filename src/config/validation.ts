@@ -1260,6 +1260,29 @@ function validateConfigObjectWithPluginsBase(
         continue;
       }
 
+      // Channel id is recognized by the bundled catalog, but no registered
+      // plugin manifest claims it. This happens when a previously-bundled
+      // channel plugin (e.g. feishu) is externalized to npm and the user
+      // upgrades without installing the new external package. Without this
+      // warning, the channel config survives quietly and the channel silently
+      // stops working after a gateway restart.
+      if (trimmed !== "defaults" && trimmed !== "modelByChannel") {
+        const { registry } = ensureRegistry();
+        const channelHasManifest = registry.plugins.some((record) =>
+          record.channels.includes(trimmed),
+        );
+        if (!channelHasManifest) {
+          const externalInstallWarning = formatMissingOfficialExternalPluginWarning(trimmed);
+          if (externalInstallWarning) {
+            warnings.push({
+              path: `channels.${trimmed}`,
+              message: externalInstallWarning,
+            });
+            continue;
+          }
+        }
+      }
+
       const channelSchema = ensureChannelSchemas().get(trimmed)?.schema;
       if (!channelSchema) {
         continue;
