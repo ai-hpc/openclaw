@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { captureEnv } from "../../test-utils/env.js";
+import { captureEnv, setTestEnvValue } from "../../test-utils/env.js";
 import { resolveOAuthRefreshLockPath } from "./paths.js";
 
 const lockBasenamePattern = /^lock-[0-9a-f]{32}$/;
@@ -28,7 +28,7 @@ describe("resolveOAuthRefreshLockPath", () => {
 
   beforeEach(async () => {
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-lock-path-"));
-    process.env.OPENCLAW_STATE_DIR = stateDir;
+    setTestEnvValue("OPENCLAW_STATE_DIR", stateDir);
   });
 
   afterEach(async () => {
@@ -91,6 +91,21 @@ describe("resolveOAuthRefreshLockPath", () => {
     expect(first).toBe(second);
   });
 
+  it("anchors the lock to an explicitly targeted state directory", () => {
+    const first = resolveOAuthRefreshLockPath("openai", "openai:default", {
+      ...process.env,
+      OPENCLAW_STATE_DIR: path.join(stateDir, "first"),
+    });
+    const second = resolveOAuthRefreshLockPath("openai", "openai:default", {
+      ...process.env,
+      OPENCLAW_STATE_DIR: path.join(stateDir, "second"),
+    });
+
+    expect(first).not.toBe(second);
+    expect(path.dirname(first)).toBe(path.join(stateDir, "first", "locks", "oauth-refresh"));
+    expect(path.dirname(second)).toBe(path.join(stateDir, "second", "locks", "oauth-refresh"));
+  });
+
   it("returns a valid path on a clean install where the locks/ directory does not yet exist", async () => {
     // Defensive check: even on a fresh install with no lock hierarchy
     // populated, the function must return a safe path. withFileLock
@@ -138,7 +153,7 @@ describe("resolveOAuthRefreshLockPath fuzz", () => {
 
   beforeEach(async () => {
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-lock-path-fuzz-"));
-    process.env.OPENCLAW_STATE_DIR = stateDir;
+    setTestEnvValue("OPENCLAW_STATE_DIR", stateDir);
   });
 
   afterEach(async () => {

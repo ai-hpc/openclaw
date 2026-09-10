@@ -5,17 +5,14 @@ import {
   hasManifestContractValue,
   listAvailableManifestContractPlugins,
 } from "./manifest-contract-eligibility.js";
-import type { PluginManifestContractListKey } from "./manifest-registry.js";
+import type { PluginManifestContractListKey, PluginManifestRecord } from "./manifest-registry.js";
 import { loadPluginMetadataSnapshot } from "./plugin-metadata-snapshot.js";
 
-export type ManifestContractRuntimePluginResolution = {
+type ManifestContractRuntimePluginResolution = {
   pluginIds: string[];
   bundledCompatPluginIds: string[];
+  plugins: PluginManifestRecord[];
 };
-
-const DEMAND_ONLY_CONTRACT_LOOKUP_OPTIONS = {
-  preferPersisted: false,
-} as const;
 
 export function resolveManifestContractRuntimePluginResolution(params: {
   cfg?: OpenClawConfig;
@@ -25,7 +22,6 @@ export function resolveManifestContractRuntimePluginResolution(params: {
   const snapshot = loadPluginMetadataSnapshot({
     config: params.cfg ?? {},
     env: process.env,
-    ...DEMAND_ONLY_CONTRACT_LOOKUP_OPTIONS,
   });
   const allContractPlugins = snapshot.plugins.filter((plugin) =>
     hasManifestContractValue({
@@ -46,5 +42,6 @@ export function resolveManifestContractRuntimePluginResolution(params: {
   return {
     pluginIds: sortUniqueStrings(pluginIds),
     bundledCompatPluginIds: sortUniqueStrings(bundledCompatPluginIds),
+    plugins: allContractPlugins,
   };
 }

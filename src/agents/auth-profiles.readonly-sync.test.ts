@@ -9,8 +9,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeOpenClawAgentDatabasesForTest } from "../state/openclaw-agent-db.js";
 import { AUTH_STORE_VERSION } from "./auth-profiles/constants.js";
+import { externalCliDiscoveryScoped } from "./auth-profiles/external-cli-discovery.js";
 import { loadPersistedAuthProfileStore } from "./auth-profiles/persisted.js";
-import { saveAuthProfileStore } from "./auth-profiles/store.js";
+import { saveAuthProfileStore } from "./auth-profiles/store-runtime.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
 
 const { resolveExternalAuthProfilesWithPluginsMock } = vi.hoisted(() => ({
@@ -29,8 +30,10 @@ const { resolveExternalAuthProfilesWithPluginsMock } = vi.hoisted(() => ({
   ]),
 }));
 
-vi.mock("../plugins/provider-runtime.js", () => ({
-  resolveExternalAuthProfilesWithPlugins: resolveExternalAuthProfilesWithPluginsMock,
+vi.mock("../plugins/provider-external-auth-core.js", () => ({
+  createProviderExternalAuthResolver: () => ({
+    resolveExternalAuthProfilesWithPlugins: resolveExternalAuthProfilesWithPluginsMock,
+  }),
 }));
 
 let clearRuntimeAuthProfileStoreSnapshots: typeof import("./auth-profiles.js").clearRuntimeAuthProfileStoreSnapshots;
@@ -115,6 +118,50 @@ describe("auth profiles read-only external auth overlay", () => {
       }
       expect(persistedOpenAiProfile.provider).toBe("openai");
       expect(persistedOpenAiProfile.key).toBe("sk-test");
+    } finally {
+      closeOpenClawAgentDatabasesForTest();
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes scoped external auth config to provider hooks", () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-auth-scoped-config-"));
+    const profileId = "google-gemini-cli:user@example.test";
+    const cfg = {
+      auth: {
+        profiles: {
+          [profileId]: {
+            provider: "google-gemini-cli",
+            mode: "oauth" as const,
+            email: "user@example.test",
+          },
+        },
+      },
+    };
+    try {
+      loadAuthProfileStoreForRuntime(agentDir, {
+        readOnly: true,
+        externalCli: externalCliDiscoveryScoped({
+          config: cfg,
+          providerIds: ["google-gemini-cli"],
+          profileIds: [profileId],
+        }),
+      });
+
+      expect(resolveExternalAuthProfilesWithPluginsMock).toHaveBeenCalledTimes(1);
+      const externalAuthCall = firstMockArg(
+        resolveExternalAuthProfilesWithPluginsMock,
+        "resolveExternalAuthProfilesWithPlugins",
+      ) as
+        | {
+            config?: unknown;
+            context?: {
+              config?: unknown;
+            };
+          }
+        | undefined;
+      expect(externalAuthCall?.config).toBe(cfg);
+      expect(externalAuthCall?.context?.config).toBe(cfg);
     } finally {
       closeOpenClawAgentDatabasesForTest();
       fs.rmSync(agentDir, { recursive: true, force: true });

@@ -1,17 +1,9 @@
 import type { StreamFn } from "../../../agents/runtime/index.js";
 import type { ThinkLevel } from "../../../auto-reply/thinking.js";
 import { streamSimple } from "../../stream.js";
+import { resolveMinimaxFastModelId } from "../minimax-fast-mode.js";
 
-const MINIMAX_FAST_MODEL_IDS = new Map<string, string>([
-  ["MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
-]);
-
-function resolveMinimaxFastModelId(modelId: unknown): string | undefined {
-  if (typeof modelId !== "string") {
-    return undefined;
-  }
-  return MINIMAX_FAST_MODEL_IDS.get(modelId.trim());
-}
+type DynamicFastMode = boolean | (() => boolean | undefined);
 
 function isMinimaxAnthropicMessagesModel(model: { api?: unknown; provider?: unknown }): boolean {
   return (
@@ -64,19 +56,15 @@ function resolvePositiveMaxTokens(value: unknown): number | undefined {
 /** @deprecated MiniMax provider-owned stream helper; do not use from third-party plugins. */
 export function createMinimaxFastModeWrapper(
   baseStreamFn: StreamFn | undefined,
-  fastMode: boolean,
+  fastMode: DynamicFastMode,
 ): StreamFn {
   const underlying = baseStreamFn ?? streamSimple;
   return (model, context, options) => {
-    if (
-      !fastMode ||
-      model.api !== "anthropic-messages" ||
-      (model.provider !== "minimax" && model.provider !== "minimax-portal")
-    ) {
+    if ((typeof fastMode === "function" ? fastMode() : fastMode) !== true) {
       return underlying(model, context, options);
     }
 
-    const fastModelId = resolveMinimaxFastModelId(model.id);
+    const fastModelId = resolveMinimaxFastModelId(model);
     if (!fastModelId) {
       return underlying(model, context, options);
     }
